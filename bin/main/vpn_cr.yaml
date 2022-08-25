@@ -2,7 +2,7 @@ apiVersion: network.tmaxanc.com/v1
 kind: VPN
 metadata:
   name: vpn-test
-  namespace: default
+  namespace: user1
 spec:
   connections:
   - name: cluster1-cluster2

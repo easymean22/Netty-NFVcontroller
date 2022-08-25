@@ -12,6 +12,8 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.util.CharsetUtil;
 
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.InetSocketAddress;
@@ -19,6 +21,7 @@ import java.util.List;
 import java.util.Base64;
 import java.util.Base64.Decoder;
 import java.util.Base64.Encoder;
+import java.util.Collections;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -29,6 +32,7 @@ import io.fabric8.kubernetes.api.model.ServiceAccount;
 import io.fabric8.kubernetes.api.model.ServiceAccountBuilder;
 import io.fabric8.kubernetes.api.model.ObjectReference;
 import io.fabric8.kubernetes.api.model.Secret;
+import io.fabric8.kubernetes.api.model.SecretBuilder;
 
 import io.fabric8.kubernetes.api.model.GenericKubernetesResource;
 import io.fabric8.kubernetes.client.Config;
@@ -37,9 +41,9 @@ import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientBuilder;
 import io.fabric8.kubernetes.client.dsl.Resource;
 import io.fabric8.kubernetes.client.dsl.base.ResourceDefinitionContext;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 
 /*
  * EchoServer 코드
@@ -107,13 +111,12 @@ class myHandler extends ChannelHandlerAdapter {
               .stream()
               .map(Pod::getMetadata)
               .map(ObjectMeta::getName)
-              //.forEach(logger::info);
               .forEach(System.out::println);
         }
 	}
 	
 	
-	void serviceAccount() {
+	void serviceAccount() throws FileNotFoundException {
 		System.setProperty("kubernetes.auth.tryKubeConfig", "true");
      	ServiceAccount serviceAccount1 = new ServiceAccountBuilder()
      			  .withNewMetadata().withName("controller-user").endMetadata()
@@ -121,11 +124,17 @@ class myHandler extends ChannelHandlerAdapter {
      			  .build();
      	try (final KubernetesClient k8s = new KubernetesClientBuilder().build()) {
      		k8s.serviceAccounts().inNamespace("user1").create(serviceAccount1);
+     		Secret secret = new SecretBuilder()
+     				.withApiVersion("v1")
+     				.withType("kubernetes.io/service-account-token")
+     				.withNewMetadata().withName("controller-user").withNamespace("user1").withAnnotations(Collections.singletonMap("kubernetes.io/service-account.name", "controller-user")).endMetadata()
+     				.build();
+     		k8s.secrets().inNamespace("user1").create(secret);
      	}
 	}
 	
 	String getTokenName(KubernetesClient k8s, String serviceAccountName) {
-    	List<String> tokenlist = k8s.serviceAccounts().inNamespace("user1").withName(serviceAccountName).get(). 
+    	List<String> tokenlist = k8s.serviceAccounts().inNamespace("user1").withName(serviceAccountName).get().
     	getSecrets(). //List<ObjectReference> 반환
     	stream().
     	map(ObjectReference::getName).
@@ -136,7 +145,8 @@ class myHandler extends ChannelHandlerAdapter {
    
     String getTokenString(KubernetesClient k8s, String tokenName) throws UnsupportedEncodingException {
     	//Secret secret = k8s.secrets().inNamespace("spring").withName(tokenName).get();
-    	Secret secret = k8s.secrets().withName(tokenName).get();
+    	Secret secret = k8s.secrets().inNamespace("user1").withName(tokenName).get();
+    			//.withName(tokenName).get();
     	String encodeToken = secret.getData().get("token");
     	Decoder decoder = Base64.getDecoder();
     	byte[] decodedBytes2 = decoder.decode(encodeToken);
@@ -146,7 +156,7 @@ class myHandler extends ChannelHandlerAdapter {
     
     String getCaCrt(KubernetesClient k8s, String tokenName) throws UnsupportedEncodingException {
     	//Secret secret = k8s.secrets().inNamespace("spring").withName(tokenName).get();
-    	Secret secret = k8s.secrets().withName(tokenName).get();
+    	Secret secret = k8s.secrets().inNamespace("user1").withName(tokenName).get();
     	String encodeCrt = secret.getData().get("ca.crt");
     	Decoder decoder = Base64.getDecoder();
     	byte[] decodedBytes2 = decoder.decode(encodeCrt);
@@ -156,7 +166,7 @@ class myHandler extends ChannelHandlerAdapter {
     
     String getNamespace(KubernetesClient k8s, String tokenName)  throws UnsupportedEncodingException {
     	//Secret secret = k8s.secrets().inNamespace("spring").withName(tokenName).get();
-    	Secret secret = k8s.secrets().withName(tokenName).get();
+    	Secret secret = k8s.secrets().inNamespace("user1").withName(tokenName).get();
     	String encodeNamespace = secret.getData().get("namespace");
     	Decoder decoder = Base64.getDecoder();
     	byte[] decodedBytes2 = decoder.decode(encodeNamespace);
@@ -170,14 +180,16 @@ class myHandler extends ChannelHandlerAdapter {
     	String token;
     	String crt;
     	String namespace;
-    	String tokenName = this.getTokenName(k8s,"controller-user");
-    	System.out.println("get Token name..");
+    	//String tokenName = this.getTokenName(k8s,"controller-user");
+    	String tokenName = "controller-user";
+    	//System.out.println("get Token name..");
     	
     	try{
     		token = this.getTokenString(k8s, tokenName);
     		Path path = Paths.get("./token");
     		Files.write(path, token.getBytes());
     	} 
+    	
     	catch(UnsupportedEncodingException e) {
     	}
     	catch(IOException e) {
@@ -226,6 +238,7 @@ class myHandler extends ChannelHandlerAdapter {
     		Resource<GenericKubernetesResource> vpnObject = springUser.genericKubernetesResources(context)
     				.load(myHandler.class.getResourceAsStream("./vpn_cr.yaml"));  // Create Custom Resource
     		vpnObject.create();
+    		System.out.println("get Token information..");
     	}
     }
 	
