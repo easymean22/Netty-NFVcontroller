@@ -1,9 +1,9 @@
 /*
  * EchoServer와 EchoClient 실행 코드
  */
-public class EchoServerExample {
+public class ServerExample {
     public static void main(String... args) {
-        EchoServer server = new EchoServer(19000);
+        Server server = new Server(19000);
         try {
             server.start();
         } catch (Exception e) {

@@ -49,10 +49,10 @@ import org.slf4j.LoggerFactory;
  * EchoServer 코드
  */
 
-public class EchoServer {
+public class Server {
     private final int port;
 
-    public EchoServer(int port) {
+    public Server(int port) {
         this.port = port;
     }
 
